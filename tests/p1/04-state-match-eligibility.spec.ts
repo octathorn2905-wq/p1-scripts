@@ -1,79 +1,97 @@
-// Order 04
-// Playwright name: STATE-MATCH veteran, provider, and clinic states must all match
-// Run this test only: npx playwright test -g "STATE-MATCH"
+/**
+ * STATE-MATCH veteran, provider, and clinic states must all match
+ *
+ * Order:    04
+ * Run only: npx playwright test -g "STATE-MATCH"
+ * Signs in: ADMIN (saved session)
+ * Leaves:   nothing. The veteran, provider and clinic states are read first and restored in `finally`. Nothing is booked.
+ */
 
-import { TestInfo, test } from '@playwright/test';
-import { expectArea, finish } from './support';
-import { adminState, app, codeOf, eligibilityText, OTHER_STATE, readTrio, requirePanel, SAME_STATE, writeClinicState, writeTrio, writeUserState } from './state-shared';
+import { test } from '@playwright/test';
+import { failApp } from '../support/errors';
+import { describeCheck, recordActual } from '../support/report';
+import { authFile } from '../support/session';
+import {
+  codeOf,
+  eligibilityText,
+  readTrio,
+  requirePanel,
+  writeClinicState,
+  writeProviderState,
+  writeTrio,
+  writeVeteranState,
+} from '../support/states';
+import { TEST_DATA } from '../support/test-data';
 
-test.use({ storageState: adminState });
+test.use({ storageState: authFile('ADMIN') });
 
-test('STATE-MATCH veteran, provider, and clinic states must all match', async ({ page }, testInfo: TestInfo) => {
-    testInfo.setTimeout(420_000);
-    expectArea(testInfo, {
-      area: 'Staff / scheduling',
-      acceptance: 'Eligible only when the veteran address state, the provider license state, and the clinic location state are the same. Any one difference says Not eligible. Nothing is booked.',
-      steps: [
-        'In Admin Users, set muskan aaa and Muskan prov to the same state, and set P1 LOC to that state under Locations.',
-        'Open Appointments, Add, Book appointment, and choose Muskan prov, P1 LOC, and muskan aaa.',
-        'Change only the veteran state and read Not eligible.',
-        'Change only the clinic state and read Not eligible.',
-        'Change only the provider license state and read Not eligible.',
-        'Put the three original states back.',
-      ],
-    });
+test('STATE-MATCH veteran, provider, and clinic states must all match', async ({ page }, testInfo) => {
+  test.setTimeout(420_000);
+  const { clinic, states } = TEST_DATA;
+  const veteran = TEST_DATA.veteran.name;
+  const provider = TEST_DATA.provider.name;
+  describeCheck(testInfo, {
+    area: 'Staff / scheduling',
+    expected:
+      'Eligible only when the veteran address state, the provider license state, and the clinic location state are the same. Any one difference says Not eligible. Nothing is booked.',
+    steps: [
+      `In Admin Users, set ${veteran} and ${provider} to the same state, and set ${clinic} to that state under Locations.`,
+      `Open Appointments, Add, Book appointment, and choose ${provider}, ${clinic}, and ${veteran}.`,
+      'Change only the veteran state and read Not eligible.',
+      'Change only the clinic state and read Not eligible.',
+      'Change only the provider license state and read Not eligible.',
+      'Put the three original states back.',
+    ],
+  });
 
-    const original = await readTrio(page);
-    let restored = false;
-    try {
-      await writeTrio(page, { veteran: SAME_STATE, provider: SAME_STATE, clinic: SAME_STATE });
-      const sameCode = codeOf(SAME_STATE);
-      const same = await eligibilityText(page);
-      requirePanel(same, { veteran: sameCode, clinic: sameCode, provider: sameCode }, true, `All three states are ${sameCode}.`);
+  const same = codeOf(states.same);
+  const other = codeOf(states.other);
+  const original = await readTrio(page);
+  let restored = false;
+  try {
+    await writeTrio(page, { veteran: states.same, provider: states.same, clinic: states.same });
+    requirePanel(await eligibilityText(page), { veteran: same, clinic: same, provider: same }, true, `All three states are ${same}.`);
 
-      await writeUserState(page, VETERAN_QUERY, 'address', OTHER_STATE);
-      const veteranDiff = await eligibilityText(page);
-      requirePanel(
-        veteranDiff,
-        { veteran: codeOf(OTHER_STATE), clinic: sameCode, provider: sameCode },
-        false,
-        `Veteran is ${codeOf(OTHER_STATE)} while clinic and provider stay ${sameCode}.`,
+    await writeVeteranState(page, states.other);
+    requirePanel(
+      await eligibilityText(page),
+      { veteran: other, clinic: same, provider: same },
+      false,
+      `Veteran is ${other} while clinic and provider stay ${same}.`,
+    );
+
+    await writeVeteranState(page, states.same);
+    await writeClinicState(page, states.other);
+    requirePanel(
+      await eligibilityText(page),
+      { veteran: same, clinic: other, provider: same },
+      false,
+      `Clinic is ${other} while veteran and provider stay ${same}.`,
+    );
+
+    await writeClinicState(page, states.same);
+    await writeProviderState(page, states.other);
+    requirePanel(
+      await eligibilityText(page),
+      { veteran: same, clinic: same, provider: other },
+      false,
+      `Provider is ${other} while veteran and clinic stay ${same}.`,
+    );
+
+    await writeTrio(page, original);
+    restored = true;
+    const after = await readTrio(page);
+    if (after.veteran !== original.veteran || after.provider !== original.provider || after.clinic !== original.clinic) {
+      failApp(
+        `Original states did not stick. Veteran ${after.veteran}, provider ${after.provider}, clinic ${after.clinic}. Expected ${original.veteran}, ${original.provider}, ${original.clinic}.`,
       );
-
-      await writeUserState(page, VETERAN_QUERY, 'address', SAME_STATE);
-      await writeClinicState(page, OTHER_STATE);
-      const clinicDiff = await eligibilityText(page);
-      requirePanel(
-        clinicDiff,
-        { veteran: sameCode, clinic: codeOf(OTHER_STATE), provider: sameCode },
-        false,
-        `Clinic is ${codeOf(OTHER_STATE)} while veteran and provider stay ${sameCode}.`,
-      );
-
-      await writeClinicState(page, SAME_STATE);
-      await writeUserState(page, PROVIDER_EMAIL, 'license', OTHER_STATE);
-      const providerDiff = await eligibilityText(page);
-      requirePanel(
-        providerDiff,
-        { veteran: sameCode, clinic: sameCode, provider: codeOf(OTHER_STATE) },
-        false,
-        `Provider is ${codeOf(OTHER_STATE)} while veteran and clinic stay ${sameCode}.`,
-      );
-
-      await writeTrio(page, original);
-      restored = true;
-      const after = await readTrio(page);
-      if (after.veteran !== original.veteran || after.provider !== original.provider || after.clinic !== original.clinic) {
-        app(`Original states did not stick. Veteran ${after.veteran}, provider ${after.provider}, clinic ${after.clinic}. Expected ${original.veteran}, ${original.provider}, ${original.clinic}.`);
-      }
-      return finish(
-        testInfo,
-        `All three on ${sameCode} is Eligible. Veteran ${codeOf(OTHER_STATE)}, clinic ${codeOf(OTHER_STATE)}, and provider ${codeOf(OTHER_STATE)} are each Not eligible on their own. States were put back to veteran ${original.veteran}, provider ${original.provider}, clinic ${original.clinic}. Nothing was booked.`,
-      );
-    } finally {
-      if (!restored) {
-        await writeTrio(page, original).catch(() => undefined);
-      }
     }
-});
 
+    recordActual(
+      testInfo,
+      `All three on ${same} is Eligible. Veteran ${other}, clinic ${other}, and provider ${other} are each Not eligible on their own. States were put back to veteran ${original.veteran}, provider ${original.provider}, clinic ${original.clinic}. Nothing was booked.`,
+    );
+  } finally {
+    if (!restored) await writeTrio(page, original).catch(() => undefined);
+  }
+});

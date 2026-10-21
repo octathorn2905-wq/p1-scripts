@@ -1,0 +1,62 @@
+---
+description: Anatomy every P1 spec file must follow (name, header, annotations, sessions, failures, cleanup)
+globs: tests/p1/**/*.spec.ts
+alwaysApply: false
+---
+
+# Writing a P1 spec
+
+## File and test name
+
+- File: `tests/p1/NN-<ticket-id-lowercase>-<short-slug>.spec.ts`, e.g. `06-nx-061-invoice-reminders.spec.ts`.
+  `NN` is the next free two-digit number. The config only picks up files matching `p1/NN-*.spec.ts`.
+- Exactly one `test()` per file. Its title starts with the ticket id, then the ticket summary:
+  `test('NX-061 Send invoice reminders before the due date', ...)`. The id is how people run it (`-g "NX-061"`).
+- IDs without a tracker number use an UPPER-KEBAB tag (`STATE-MATCH`, `ZONE-PORTAL`).
+
+## Header block
+
+Every spec starts with this block, filled in:
+
+```ts
+/**
+ * <ID> <ticket summary, same as the test title>
+ *
+ * Order:    NN
+ * Run only: npx playwright test -g "<ID>"
+ * Signs in: <ADMIN / VETERAN / PROVIDER (saved sessions), or how else it signs in>
+ * Leaves:   <what records stay behind, or "nothing. Restored in `finally`." / "nothing. Read-only.">
+ */
+```
+
+## Body, in this order
+
+1. `test.setTimeout(...)` when the flow needs more than the 360s default (or less, to fail faster).
+2. `describeCheck(testInfo, { area, expected, steps })`: `expected` is the acceptance criterion in plain words;
+   `steps` are numbered repro steps a manual tester could follow. Build names in steps from `TEST_DATA`.
+3. Run-unique values from one `const id = stamp()` (titles, references, comments), so a run's records are findable.
+4. Sessions:
+   - Single role for the whole test: `test.use({ storageState: authFile('ADMIN') })` and use the `page` fixture.
+   - Several roles: `openSession(browser, 'ADMIN')` per role, and close every context in `finally`.
+   - Sign in through the form (`signIn`) only when the check is about signing in or uses a brand-new user.
+5. Navigate with `gotoPortal(page, portal, route)`. Never build portal URLs by hand.
+6. Assert. Prefer `expect(...)` web-first assertions; use `failApp(...)` with a message that says what was
+   expected and what was seen (quote page text through `flat(...).slice(0, N)`).
+7. End with `recordActual(testInfo, '...')`: one or two sentences of what was observed, including the ids created.
+8. `try { ... } finally { ... }` closes contexts and restores anything changed (read original values first).
+
+## Failure kinds
+
+| Helper           | Use when                                                         |
+| ---------------- | ---------------------------------------------------------------- |
+| `failApp`        | The product behaved wrong. This is a P1 finding.                 |
+| `failTestData`   | A record the check needs is missing / in the wrong state.        |
+| `failAutomation` | The script cannot drive the page (third-party site, no verdict). |
+
+Do not report an automation problem as `failApp`; a false P1 finding is worse than a skipped one.
+
+## Do not
+
+- Add `test.describe`, `test.only`, `test.skip` without a ticket reason, or retries.
+- Import from another spec. Shared code moves to `tests/support/`.
+- Leave new records with names that cannot be traced to the run (always include `stamp()`).

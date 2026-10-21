@@ -1,0 +1,40 @@
+---
+description: What this repo is, how it is laid out, and the rules every change must follow
+alwaysApply: true
+---
+
+# P1 production-blocker checks
+
+Playwright + TypeScript scripts that verify Nexletta P1 tickets against the **live** portals
+(staff, veteran, provider). Each spec is one ticket verification, not a unit test. The checks
+create and change real records, so they run one at a time, in file-name order.
+
+## Layout
+
+```
+tests/
+  auth.setup.ts        # `setup` project: signs ADMIN, VETERAN, PROVIDER in once, writes .auth/*.json
+  p1/NN-<id>-<slug>.spec.ts   # one P1 check per file, NN = run order
+  support/             # everything that is not a test (see 20-support-modules.mdc)
+  fixtures/            # files the checks upload
+.cursor/rules/         # these rules
+playwright.config.ts   # projects: setup → p1
+```
+
+## Commands
+
+- `npm run check`: typecheck + Prettier. Must pass before every commit.
+- `npm test`: run every check (setup runs first automatically).
+- `npx playwright test -g "<ID>"`: run one check by its id, e.g. `-g "NX-049"`.
+- `npm run test:list`: confirm a new spec is picked up, in the right order.
+- `npm run report`: open the HTML report from the last run.
+
+## Non-negotiables
+
+1. Never commit `.env`, `.auth/`, passwords, tokens, or personal emails. Accounts come from `.env`.
+2. Specs never inline record names, ids or portal URLs. Use `TEST_DATA` (`tests/support/test-data.ts`) and `portalUrl()`.
+3. Every deliberate failure goes through `failApp`, `failTestData` or `failAutomation`. Never `throw new Error`.
+4. A check that changes shared settings reads them first and restores them in `finally`.
+5. Specs contain only the ticket flow. Anything reusable lives in `tests/support/`, in the module that owns that area.
+6. Keep the README test table in sync with `tests/p1/`.
+7. `npm run check` must pass. Do not weaken `tsconfig.json` strictness to make it pass.

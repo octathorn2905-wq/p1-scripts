@@ -1,0 +1,67 @@
+---
+description: Step-by-step process for adding (or reworking) a P1 check from a ticket. Use when asked to script, automate or add a test for a P1 / NX ticket.
+alwaysApply: false
+---
+
+# Adding a P1 check
+
+Follow these steps in order. Do not skip the verification at the end.
+
+1. **Read the ticket.** Write down the id, the summary, the acceptance criterion, which roles are involved,
+   and which records it creates or changes.
+2. **Pick the file name.** Next free `NN` in `tests/p1/` + `<id-lowercase>-<slug>.spec.ts`.
+3. **Check test data.** Every fixed record the flow needs must be in `TEST_DATA`. Add missing ones with a doc
+   comment. New accounts: `.env.example` + `SAVED_SESSIONS` (see `20-support-modules.mdc`).
+4. **Check helpers.** Search `tests/support/` for flows you need (sign-in, task dialog, state fields, ...).
+   Reuse them; put new reusable steps in the owning module, not in the spec.
+5. **Write the spec from the template below.** Follow `10-p1-specs.mdc` and `30-locators-and-waits.mdc`.
+6. **Restore what you change.** Read original values before changing shared settings; put them back in `finally`.
+7. **Verify:**
+   - `npm run check` passes.
+   - `npm run test:list` shows the new test under `[p1]`, in its order.
+   - `npx playwright test -g "<ID>" --headed` passes against the environment, and a deliberate break (wrong
+     expected value) fails with a `[application]` message that explains the problem.
+8. **Update the README** test table: order, file, Playwright name, run command.
+
+## Template
+
+```ts
+/**
+ * <ID> <Ticket summary>
+ *
+ * Order:    NN
+ * Run only: npx playwright test -g "<ID>"
+ * Signs in: ADMIN (saved session)
+ * Leaves:   <records left behind, or "nothing. Restored in `finally`.">
+ */
+
+import { BrowserContext, Page, test } from '@playwright/test';
+import { failApp } from '../support/errors';
+import { describeCheck, recordActual } from '../support/report';
+import { gotoPortal, openSession } from '../support/session';
+import { TEST_DATA } from '../support/test-data';
+import { stamp } from '../support/ui';
+
+test('<ID> <Ticket summary>', async ({ browser }, testInfo) => {
+  describeCheck(testInfo, {
+    area: '<Portal / module>',
+    expected: '<Acceptance criterion in plain words.>',
+    steps: ['<Step one.>', '<Step two.>'],
+  });
+
+  const id = stamp();
+  const staffSession = await openSession(browser, 'ADMIN');
+  const staff = staffSession.page;
+  let otherSession: { context: BrowserContext; page: Page } | undefined;
+  try {
+    await gotoPortal(staff, 'staff', '/staff/<route>');
+    // ... the ticket flow, using TEST_DATA and `id` ...
+    if (!ok) failApp(`<What was expected>. <What was seen>.`);
+
+    recordActual(testInfo, `<What was observed, with the ids created>.`);
+  } finally {
+    await otherSession?.context.close();
+    await staffSession.context.close();
+  }
+});
+```
