@@ -1,0 +1,31 @@
+---
+description: Playwright locator, waiting and timeout conventions for specs and support helpers
+globs: tests/**/*.ts
+alwaysApply: false
+---
+
+# Locators and waits
+
+## Locators, in order of preference
+
+1. `getByRole(role, { name })`, with `exact: true` when the name is a full label.
+2. `getByLabel`, `getByText` for visible text the ticket talks about.
+3. Stable app class names already in use (`.nxl-*`, `.billing-*`, `.rbc-event`, `.ant-select-*`) when there is no accessible name.
+4. Never XPath or nth-child chains, except to reach a control that has no label (comment why).
+
+Scope to the dialog or row first (`page.getByRole('dialog').last()`, `page.locator('tr').filter({ hasText: id })`),
+then find controls inside it.
+
+## Waiting
+
+- Prefer web-first assertions (`await expect(locator).toBeVisible()`) and `locator.waitFor(...)`.
+- `page.waitForTimeout` only to let a debounced search or a save settle, never above ~1.5s, and never as the
+  only wait for something you then assert.
+- Optional UI (a control that only some builds show): `if (await x.isVisible().catch(() => false)) ...`.
+  Do not use this pattern for something the ticket requires; let it fail instead.
+- Loading splashes are handled by `waitForShell` / `gotoPortal` / `readPage`. Do not re-implement them.
+
+## Timeouts
+
+Config defaults: test 360s, expect and actions 25s, navigation 45s. Override per call only when a step is known
+to be slower (email delivery, calendar load), and put the reason in the step name or a short comment.

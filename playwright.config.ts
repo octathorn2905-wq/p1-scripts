@@ -1,17 +1,18 @@
 import { defineConfig, devices } from '@playwright/test';
-import { loadEnv } from './tests/helpers/env';
+import { loadEnv } from './tests/support/env';
 
 loadEnv();
 
 export default defineConfig({
-  testDir: './tests/p1',
+  testDir: './tests',
   timeout: 360_000,
   expect: { timeout: 25_000 },
+  // The checks share live accounts and records, so they run one at a time, in file-name order.
   fullyParallel: false,
   workers: 1,
   retries: 0,
   outputDir: 'reports/artifacts',
-  reporter: [['list']],
+  reporter: [['list'], ['html', { outputFolder: 'reports/html', open: 'never' }]],
   use: {
     headless: true,
     trace: 'retain-on-failure',
@@ -19,13 +20,18 @@ export default defineConfig({
     video: 'off',
     actionTimeout: 25_000,
     navigationTimeout: 45_000,
-    viewport: { width: 1440, height: 900 },
     ignoreHTTPSErrors: true,
   },
   projects: [
     {
+      name: 'setup',
+      testMatch: /auth\.setup\.ts$/,
+      use: { ...devices['Desktop Chrome'] },
+    },
+    {
       name: 'p1',
-      testMatch: /[/\\]\d{2}-.+\.spec\.ts$/,
+      testMatch: /p1[/\\]\d{2}-.+\.spec\.ts$/,
+      dependencies: ['setup'],
       use: { ...devices['Desktop Chrome'] },
     },
   ],

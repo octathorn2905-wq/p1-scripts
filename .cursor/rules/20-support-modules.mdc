@@ -1,0 +1,44 @@
+---
+description: Which tests/support module owns which helper, and how to add or change helpers
+globs: tests/support/**/*.ts, tests/auth.setup.ts
+alwaysApply: false
+---
+
+# Support modules
+
+`tests/support/` holds every non-test file. Each module owns one area. Put new helpers in the owning
+module; create a new module only for a new product area (one per area, named after it: `billing.ts`, `cases.ts`).
+
+| Module         | Owns                                                                                                  |
+| -------------- | ----------------------------------------------------------------------------------------------------- |
+| `env.ts`       | `.env` loading, `requireEnv`, `portalUrl`, `credentials`, `Portal` / `RoleKey` types                  |
+| `errors.ts`    | `P1Error` and `failApp` / `failTestData` / `failAutomation`                                           |
+| `session.ts`   | `SAVED_SESSIONS`, `authFile`, `signIn`, `openSession`, `gotoPortal`, `waitForShell`                   |
+| `report.ts`    | `describeCheck`, `recordActual` (test annotations)                                                    |
+| `test-data.ts` | `TEST_DATA`: every fixed record name / id the checks rely on                                          |
+| `ui.ts`        | Generic page reading: `readPage`, `readDialog`, `selectedOption`, `checkedLabel`, `flat`, `stamp`, `escapeRegExp`, `RECORD_FILE` |
+| `tasks.ts`     | Task list and task dialog flows, due-date picker                                                      |
+| `states.ts`    | Admin user / location state fields and the Book appointment eligibility panel                         |
+| `timezones.ts` | Profile timezone, timezone selects, calendar visit times                                              |
+
+## Dependency direction
+
+`errors`, `env`, `test-data`, `ui` ← `session` ← area modules (`tasks`, `states`, `timezones`, …) ← specs.
+(`env` may import `errors`; `ui` imports nothing local.)
+Area modules never import each other or any spec. No barrel `index.ts`; import from the module directly.
+
+## Helper rules
+
+- Export only what a spec calls. Keep step helpers (`openUser`, `commit`, …) module-private.
+- Every exported function gets a one-line `/** */` saying what it does and what it returns.
+- Helpers fail with `failApp` / `failTestData` / `failAutomation` and a message a reader can act on.
+- Record names come from `TEST_DATA`; accounts from `credentials()`. No literals for either.
+- Escape any `TEST_DATA` value used inside a `RegExp` with `escapeRegExp`.
+- Before adding a helper, search `tests/support/` for an existing one. Extend it rather than adding a near copy.
+- Delete helpers that no spec uses any more.
+
+## Saved sessions
+
+Adding a role to `SAVED_SESSIONS` makes `tests/auth.setup.ts` sign it in on every run. Add it only when a spec
+needs that role's saved session, and add its `<ROLE>_EMAIL` / `<ROLE>_PASSWORD` to the "Signed in once per run"
+block of `.env.example`.

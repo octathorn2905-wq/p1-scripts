@@ -1,17 +1,10 @@
 import fs from 'fs';
 import path from 'path';
+import { failAutomation } from './errors';
 
 export type Portal = 'staff' | 'veteran' | 'provider';
 
-export type RoleKey =
-  | 'ADMIN'
-  | 'SCHEDULER'
-  | 'BILLER'
-  | 'REVIEWER'
-  | 'ORGANIZATION'
-  | 'VETERAN'
-  | 'REPRESENTATIVE'
-  | 'PROVIDER';
+export type RoleKey = 'ADMIN' | 'SCHEDULER' | 'BILLER' | 'REVIEWER' | 'ORGANIZATION' | 'VETERAN' | 'REPRESENTATIVE' | 'PROVIDER';
 
 const PORTAL_URL: Record<Portal, string> = {
   staff: 'STAFF_URL',
@@ -19,8 +12,9 @@ const PORTAL_URL: Record<Portal, string> = {
   provider: 'PROVIDER_URL',
 };
 
+/** Read `.env` from the repo root into `process.env`. Values already set in the shell win. */
 export function loadEnv(): void {
-  const file = path.resolve(process.cwd(), '.env');
+  const file = path.resolve(__dirname, '..', '..', '.env');
   if (!fs.existsSync(file)) return;
   for (const line of fs.readFileSync(file, 'utf8').split(/\r?\n/)) {
     const trimmed = line.trim();
@@ -36,21 +30,9 @@ export function loadEnv(): void {
   }
 }
 
-export class SmokeError extends Error {
-  readonly kind: 'application' | 'automation' | 'test-data';
-
-  constructor(kind: 'application' | 'automation' | 'test-data', message: string) {
-    super(`[${kind}] ${message}`);
-    this.name = 'SmokeError';
-    this.kind = kind;
-  }
-}
-
 export function requireEnv(name: string): string {
   const value = process.env[name]?.trim();
-  if (!value) {
-    throw new SmokeError('automation', `Missing environment variable ${name}. Add it to smoke/.env.`);
-  }
+  if (!value) failAutomation(`Missing environment variable ${name}. Add it to .env (see .env.example).`);
   return value;
 }
 
@@ -63,16 +45,4 @@ export function credentials(role: RoleKey): { email: string; password: string } 
     email: requireEnv(`${role}_EMAIL`),
     password: requireEnv(`${role}_PASSWORD`),
   };
-}
-
-export function foreignCaseId(): string {
-  return process.env.SMOKE_FOREIGN_CASE_ID?.trim() || 'NXL-2026-0245';
-}
-
-export function foreignInvoiceId(): string {
-  return process.env.SMOKE_FOREIGN_INVOICE_ID?.trim() || 'INV-2026-0517';
-}
-
-export function foreignVeteranName(): string {
-  return process.env.SMOKE_FOREIGN_VETERAN_NAME?.trim() || 'Nex Vet';
 }

@@ -1,0 +1,30 @@
+---
+description: Where credentials, portal URLs and fixed test records live, and how to change them safely
+globs: .env.example, tests/support/env.ts, tests/support/test-data.ts
+alwaysApply: false
+---
+
+# Environment and test data
+
+## `.env` (never committed)
+
+- Portal URLs (`STAFF_URL`, `VETERAN_URL`, `PROVIDER_URL`) and `<ROLE>_EMAIL` / `<ROLE>_PASSWORD` pairs.
+- `.env.example` lists every key with an empty value. Add a key there in the same change that first reads it.
+- Read values only through `requireEnv`, `portalUrl` or `credentials`, so a missing key fails as `[automation]`
+  with the key's name.
+- Shell environment variables override `.env` (useful for CI secrets).
+
+## `TEST_DATA` (committed)
+
+`tests/support/test-data.ts` holds fixed records in the target environment: names, ids, option labels.
+These are identifiers, not secrets.
+
+- One entry per record, with a `/** */` saying what it is and which check depends on it.
+- Group by record (`veteran`, `provider`, ...). The VETERAN / PROVIDER entries describe the same accounts as
+  `.env`; keep them in step when the accounts change.
+- Never put emails, phone numbers or passwords here. If a check needs an account's email, use `credentials(role).email`.
+- When a record is renamed in the environment, change it here only. A spec that still breaks has an inlined literal; fix that too.
+
+## `.auth/` (never committed)
+
+Written by `tests/auth.setup.ts` on every run. Delete it freely; the next run recreates it.
