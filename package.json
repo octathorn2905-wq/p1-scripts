@@ -1,0 +1,12 @@
+{
+  "name": "production-blockers-p1",
+  "private": true,
+  "description": "Playwright scripts for Nexletta production blockers.",
+  "scripts": {
+    "test": "playwright test",
+    "test:headed": "playwright test --headed"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.55.1"
+  }
+}
